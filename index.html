@@ -57,7 +57,8 @@ table{width:100%;border-collapse:collapse}th,td{padding:11px;border-bottom:1px s
 <div class="field"><label>Nombre del proyecto *</label><input id="p_name" placeholder="Ej. Proyecto 40 Sur"></div>
 <div class="field"><label>Responsable</label><input id="p_owner" placeholder="Nombre del responsable"></div>
 <div class="field"><label>Tipo de proyecto</label><select id="p_type"><option>Inversión</option><option>Operacional</option><option>Social</option><option>Infraestructura</option><option>Otro</option></select></div>
-<div class="field"><label>Fecha de inicio</label><input id="p_start" type="date"></div>
+<div class="field"><label>Año de inicio *</label><select id="p_startYear"></select></div>
+<div class="field"><label>Mes de inicio *</label><select id="p_startMonth"><option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option><option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option><option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option><option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option></select></div>
 <div class="field"><label>Horizonte (meses) *</label><input id="p_months" type="number" min="6" value="12"></div>
 <div class="field"><label>Tasa de descuento anual (%) *</label><input id="p_rate" type="number" step="0.01" value="12"></div>
 <div class="field"><label>Inversión inicial *</label><input id="p_investment" type="number" min="0" value="0"></div>
@@ -123,6 +124,14 @@ var projects=[];
 try{projects=JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){projects=[]}
 var activeId=null;
 
+function initStartPeriod(){
+ var sel=document.getElementById("p_startYear"), current=new Date().getFullYear();
+ for(var y=current-5;y<=current+15;y++){var o=document.createElement("option");o.value=y;o.textContent=y;sel.appendChild(o)}
+ sel.value=String(current);
+ document.getElementById("p_startMonth").value=String(new Date().getMonth()+1);
+}
+initStartPeriod();
+
 function money(v){return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",maximumFractionDigits:0}).format(Number(v)||0)}
 function pct(v){return Number.isFinite(v)?(v*100).toFixed(2)+"%":"—"}
 function getActive(){return projects.find(function(p){return p.id===activeId})||null}
@@ -168,7 +177,7 @@ function createProject(){
  var name=document.getElementById("p_name").value.trim();
  if(!name){alert("Ingresa el nombre del proyecto.");return}
  var p={id:activeId||String(Date.now()),name:name,owner:document.getElementById("p_owner").value,
- type:document.getElementById("p_type").value,start:document.getElementById("p_start").value,
+ type:document.getElementById("p_type").value,startYear:Number(document.getElementById("p_startYear").value)||new Date().getFullYear(),startMonth:Number(document.getElementById("p_startMonth").value)||1,
  months:months,rate:Number(document.getElementById("p_rate").value)||0,
  investment:Number(document.getElementById("p_investment").value)||0,financing:Number(document.getElementById("p_financing").value)||0,flow:[]};
  if(activeId){var idx=projects.findIndex(function(x){return x.id===activeId});p.flow=(projects[idx]&&projects[idx].flow)||[];projects[idx]=p}
@@ -183,18 +192,19 @@ function renderProject(){
  var p=getActive(),box=document.getElementById("activeProjectBox");
  if(!p){box.innerHTML='<div class="empty">No hay proyecto activo. Usa “Nuevo proyecto” para comenzar.</div>';return}
  document.getElementById("p_name").value=p.name;document.getElementById("p_owner").value=p.owner||"";
- document.getElementById("p_type").value=p.type||"Inversión";document.getElementById("p_start").value=p.start||"";
+ document.getElementById("p_type").value=p.type||"Inversión";var sy=p.startYear,sm=p.startMonth;if((!sy||!sm)&&p.start){var d=new Date(p.start+"T00:00:00");if(!isNaN(d)){sy=d.getFullYear();sm=d.getMonth()+1}}document.getElementById("p_startYear").value=String(sy||new Date().getFullYear());document.getElementById("p_startMonth").value=String(sm||1);
  document.getElementById("p_months").value=p.months;document.getElementById("p_rate").value=p.rate;
  document.getElementById("p_investment").value=p.investment;document.getElementById("p_financing").value=p.financing;
- box.innerHTML="<b>Proyecto activo:</b> "+p.name+" · "+p.months+" meses · Inversión "+money(p.investment);
+ var monthNames=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];box.innerHTML="<b>Proyecto activo:</b> "+p.name+" · Inicio: "+monthNames[(p.startMonth||1)-1]+" "+(p.startYear||new Date().getFullYear())+" · "+p.months+" meses · Inversión "+money(p.investment);
 }
 function renderFlow(){
  var p=getActive(),no=document.getElementById("flowNoProject"),content=document.getElementById("flowContent");
  if(!p){no.style.display="block";content.style.display="none";return}
  no.style.display="none";content.style.display="block";
  while(p.flow.length<p.months)p.flow.push({inc:0,cost:0,op:0,nonop:0,tax:0});
- var h="<thead><tr><th>Mes</th><th>Ingresos</th><th>Costos</th><th>Gastos operacionales</th><th>Gastos no operacionales</th><th>Impuestos</th><th>Flujo neto</th></tr></thead><tbody>";
- p.flow.forEach(function(x,i){h+='<tr><td>Mes '+(i+1)+'</td>'+
+ var monthNames=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+ var h="<thead><tr><th>Periodo</th><th>Ingresos</th><th>Costos</th><th>Gastos operacionales</th><th>Gastos no operacionales</th><th>Impuestos</th><th>Flujo neto</th></tr></thead><tbody>";
+ p.flow.forEach(function(x,i){var d=new Date((p.startYear||new Date().getFullYear()),(p.startMonth||1)-1+i,1);var yy=d.getFullYear(),mm=d.getMonth();h+='<tr><td><b>Mes '+(i+1)+'</b><br><span style="font-size:12px;color:#64748b">'+monthNames[mm]+' '+yy+'</span></td>'+
  '<td><input class="flow-input" data-i="'+i+'" data-k="inc" type="number" value="'+(x.inc||0)+'"></td>'+
  '<td><input class="flow-input" data-i="'+i+'" data-k="cost" type="number" value="'+(x.cost||0)+'"></td>'+
  '<td><input class="flow-input" data-i="'+i+'" data-k="op" type="number" value="'+(x.op||0)+'"></td>'+
@@ -261,12 +271,13 @@ function renderDashboard(){
 }
 function renderReport(){
  var p=getActive(),box=document.getElementById("reportContent");
+ var monthNames=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
  if(!p){box.innerHTML='<div class="empty">No hay proyecto activo.</div>';return}
  var m=metrics(p);
  var profitable=(m.net>0&&Number.isFinite(m.roi)&&m.roi>0);
  var dict=(profitable&&m.status==="VIABLE")?"DICTAMEN FAVORABLE":((profitable||m.status==="VIABLE CONDICIONADO")?"DICTAMEN CONDICIONADO":"DICTAMEN DESFAVORABLE");
  box.innerHTML="<h2>"+p.name+"</h2>"+
- "<p><b>Horizonte:</b> "+p.months+" meses · <b>Tasa:</b> "+p.rate+"% · <b>Inversión:</b> "+money(p.investment)+"</p>"+
+ "<p><b>Inicio:</b> "+monthNames[(p.startMonth||1)-1]+" "+(p.startYear||new Date().getFullYear())+" · <b>Horizonte:</b> "+p.months+" meses · <b>Tasa:</b> "+p.rate+"% · <b>Inversión:</b> "+money(p.investment)+"</p>"+
  "<div class='grid'><div class='card kpi'><div class='label'>VPN</div><div class='value'>"+money(m.pv)+"</div></div>"+
  "<div class='card kpi'><div class='label'>TIR</div><div class='value'>"+pct(m.tir)+"</div></div>"+
  "<div class='card kpi'><div class='label'>ROI</div><div class='value'>"+pct(m.roi)+"</div></div>"+
